@@ -7,18 +7,20 @@ const { PORT } = process.env;
 
 const app = express();
 
+const yupObj = yup.object();
+
 const validationSchemaObject = {
-  delete: yup.object().shape({
-    id: yup.number().required().positive().integer(),
+  delete: yupObj.shape({
+    id: yup.number().required().positive().integer().required(),
   }),
-  put: yup.object().shape({
+  put: yupObj.shape({
     name: yup.string().required(),
-    id: yup.number().required().positive().integer(),
-    email: yup.string().email(),
+    id: yup.number().required().positive().integer().required(),
+    email: yup.string().email().required(),
   }),
-  post: yup.object().shape({
+  post: yupObj.shape({
     name: yup.string().required(),
-    email: yup.string().email(),
+    email: yup.string().email().required(),
   }),
 };
 
@@ -46,24 +48,38 @@ app.use("/:id", (req, res, next) => {
   next();
 });
 
-app.use("/", async (req, res, next) => {
+app.use("/",  (req, res, next) => {
   try {
     console.log("Content Legth", req.headers["content-length"]);
     if (req.headers["content-length"] > 200) return res.sendStatus(412);
+   next();
+  } catch (ex) {
+    console.error(ex);
+    return res.sendStatus(500);
+  }
+});
 
-    const schemaValidation = validationSchemaObject[req.method.toLowerCase()];
+app.use("/", async (req, res, next) => {
+  try {
     if (
       req.method === "POST" ||
       req.method === "DELETE" ||
       req.method === "PUT"
     ) {
-      if (!(await schemaValidation.isValid(req.body)))
-        return res.sendStatus(400);
+      const schemaValidation = validationSchemaObject[req.method.toLowerCase()];
+      const validation = await schemaValidation
+        .validate(req.body, {
+          stripUnknown: true,
+        })
+       req.body = validation;
     }
     return next();
   } catch (ex) {
     console.error(ex);
-    return res.sendStatus(500);
+    const {name} = ex;
+    if (name ==="ValidationError")
+    return res.sendStatus(400);
+    else res.sendStatus(500)
   }
 });
 
